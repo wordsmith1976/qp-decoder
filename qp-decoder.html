@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>QP Code Decoder</title>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #f7f6f2;
+      --surface:  #ffffff;
+      --border:   #d0ccc4;
+      --border-light: #e4e1da;
+      --navy:     #1c2b4a;
+      --navy-mid: #2e4472;
+      --gold:     #8a6f3e;
+      --gold-lt:  #b89050;
+      --text:     #1a1a1a;
+      --text-mid: #3d3d3d;
+      --muted:    #706b61;
+      --error-bg: #fdf2f2;
+      --error-br: #c0392b;
+      --error-tx: #7b1c12;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 15px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 3rem 1.25rem 4rem;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 640px;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 2px solid var(--navy);
+      padding-bottom: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    .inst-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-family: 'Source Serif 4', serif;
+      font-size: 2rem;
+      font-weight: 600;
+      color: var(--navy);
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      margin-top: 0.4rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    /* ── Input row ── */
+    .input-row {
+      display: flex;
+      gap: 0;
+      margin-bottom: 1.5rem;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-family: 'Source Sans 3', monospace;
+      font-size: 1.25rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      padding: 0.75rem 1rem;
+      outline: none;
+    }
+
+    input[type="text"]::placeholder {
+      color: var(--border);
+      font-size: 0.95rem;
+      letter-spacing: 0.04em;
+      font-weight: 400;
+    }
+
+    .input-row:focus-within {
+      border-color: var(--navy);
+    }
+
+    button {
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      font-family: 'Source Sans 3', sans-serif;
+      font-weight: 600;
+      font-size: 0.8rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.75rem 1.4rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    button:hover { background: var(--navy-mid); }
+    button:active { opacity: 0.85; }
+
+    /* ── Error ── */
+    .error {
+      display: none;
+      background: var(--error-bg);
+      border: 1px solid var(--error-br);
+      border-left: 4px solid var(--error-br);
+      color: var(--error-tx);
+      padding: 0.8rem 1rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+    .error.visible { display: block; }
+
+    /* ── Result card ── */
+    .result {
+      display: none;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+    }
+    .result.visible { display: block; }
+
+    .result-header {
+      background: var(--navy);
+      color: #fff;
+      padding: 0.9rem 1.25rem;
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .result-code {
+      font-family: 'Source Serif 4', serif;
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+
+    .result-year-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: rgba(255,255,255,0.15);
+      padding: 0.2rem 0.6rem;
+      border-radius: 2px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .field {
+      padding: 0.9rem 1.25rem;
+      border-bottom: 1px solid var(--border-light);
+      border-right: 1px solid var(--border-light);
+    }
+
+    .field:nth-child(2n) { border-right: none; }
+
+    .field:nth-last-child(-n+2) { border-bottom: none; }
+
+    .field.full {
+      grid-column: 1 / -1;
+      border-right: none;
+    }
+
+    .field-label {
+      font-size: 0.67rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+
+    .field-value {
+      font-family: 'Source Serif 4', serif;
+      font-size: 1.05rem;
+      color: var(--navy);
+    }
+
+    .field.subject-field .field-value {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    /* ── Code anatomy strip ── */
+    .anatomy {
+      border-top: 1px solid var(--border-light);
+      padding: 0.8rem 1.25rem;
+      background: #fafaf8;
+      display: flex;
+      gap: 0;
+      overflow-x: auto;
+    }
+
+    .seg {
+      flex: 1;
+      min-width: 52px;
+      text-align: center;
+      padding: 0.45rem 0.6rem;
+      border: 1px solid var(--border-light);
+    }
+    .seg + .seg { border-left: none; }
+
+    .seg-val {
+      font-family: 'Source Serif 4', serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--navy);
+    }
+
+    .seg-lbl {
+      font-size: 0.59rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 0.2rem;
+    }
+
+    .seg.s-prefix { border-top-color: var(--navy); }
+    .seg.s-prog   { border-top: 2px solid #2980b9; }
+    .seg.s-year   { border-top: 2px solid #27ae60; }
+    .seg.s-sem    { border-top: 2px solid var(--gold-lt); }
+    .seg.s-sub    { border-top: 2px solid #8e44ad; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 2.5rem;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    footer strong { color: var(--text-mid); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="inst-label">Academic Records · Question Paper Reference</div>
+    <h1>QP Code Decoder</h1>
+    <p class="subtitle">Enter an 8-digit question paper code to identify the programme, subject, and semester.</p>
+  </header>
+
+  <div class="input-row">
+    <input type="text" id="codeInput" maxlength="10" placeholder="e.g. 18125208" autocomplete="off" spellcheck="false" inputmode="numeric"/>
+    <button onclick="decode()">Decode</button>
+  </div>
+
+  <div class="error" id="errorBox"></div>
+
+  <div class="result" id="resultBox">
+    <div class="result-header">
+      <span class="result-code" id="rCode"></span>
+      <span class="result-year-badge" id="rBadge"></span>
+    </div>
+    <div class="fields" id="fieldsGrid"></div>
+    <div class="anatomy" id="anatomy"></div>
+  </div>
+
+  <footer>
+    <strong>Code format:</strong> 18 · Programme · Admission Year · Semester · Subject No.<br>
+    Database covers 390 question paper codes across all programmes and semesters.<br>
+    Press <strong>Enter</strong> to decode.
+  </footer>
+</div>
+
+<script>
+const DB = {
+  "18322105": {s:"Accounts", p:"M.Sc.", a:"2022", sem:1, y:"MSTS1"},
+  "18323105": {s:"Accounts", p:"M.Sc.", a:"2023", sem:1, y:"MSTS2"},
+  "18324105": {s:"Accounts", p:"M.Sc.", a:"2024", sem:1, y:"MSTS3"},
+  "18325105": {s:"Accounts", p:"M.Sc.", a:"2025", sem:1, y:"MSTS4"},
+  "18222106": {s:"Accounts", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223106": {s:"Accounts", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224105": {s:"Accounts", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18225105": {s:"Accounts", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18223206": {s:"Accounts", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224207": {s:"Accounts", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225207": {s:"Accounts", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18222208": {s:"Accounts", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18322303": {s:"Adv & ST", p:"M.Sc.", a:"2022", sem:3, y:"MSTS1"},
+  "18323302": {s:"Adv & ST", p:"M.Sc.", a:"2023", sem:3, y:"MSTS2"},
+  "18324302": {s:"Adv & ST", p:"M.Sc.", a:"2024", sem:3, y:"MSTS3"},
+  "18322405": {s:"AST", p:"M.Sc.", a:"2022", sem:4, y:"MSTS1"},
+  "18323405": {s:"AST", p:"M.Sc.", a:"2023", sem:4, y:"MSTS2"},
+  "18324405": {s:"AST", p:"M.Sc.", a:"2024", sem:4, y:"MSTS3"},
+  "18222111": {s:"Bakery", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223111": {s:"Bakery", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224109": {s:"Bakery", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18222211": {s:"Bakery", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18223210": {s:"Bakery", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224210": {s:"Bakery", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18223411": {s:"Bakery", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18222411": {s:"Bakery", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18225210": {s:"Bakery", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18224410": {s:"Bakery", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18225110": {s:"Bakery", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18222509": {s:"Bakery", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223509": {s:"Bakery", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18222311": {s:"Bakery", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18223310": {s:"Bakery", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18224310": {s:"Bakery", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18122104": {s:"Bakery", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18123104": {s:"Bakery", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18124104": {s:"Bakery", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18122204": {s:"Bakery", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18123204": {s:"Bakery", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18124204": {s:"Bakery", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18123304": {s:"Bakery", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18124304": {s:"Bakery", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18123404": {s:"Bakery", p:"Culinary Studies", a:"2023", sem:4, y:"BSCS2"},
+  "18124404": {s:"Bakery", p:"Culinary Studies", a:"2024", sem:4, y:"BSCS3"},
+  "18125204": {s:"Bakery", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18122304": {s:"Bakery", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18122404": {s:"Bakery", p:"Culinary Studies", a:"2022", sem:4, y:"BSCS1"},
+  "18125104": {s:"Bakery", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18424302": {s:"Bakery", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18424402": {s:"Bakery", p:"Cruise Lines", a:"2022", sem:4, y:"BSCL1"},
+  "18424204": {s:"Bakery", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18425204": {s:"Bakery", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18424101": {s:"Bakery", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18425107": {s:"Bakery", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18222107": {s:"Cat Sci", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223107": {s:"Cat Sci", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224106": {s:"Cat Sci", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18222206": {s:"Cat Sci", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18223207": {s:"Cat Sci", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224205": {s:"Cat Sci", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225106": {s:"Cat Sci", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18225205": {s:"Cat Sci", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18122108": {s:"Communication Skills", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18123108": {s:"Communication Skills", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18124108": {s:"Communication Skills", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18424106": {s:"Communication Skills", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18122208": {s:"Communication Skills", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18123208": {s:"Communication Skills", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18124208": {s:"Communication Skills", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18225208": {s:"Communication Skills", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18123308": {s:"Communication Skills", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18124308": {s:"Communication Skills", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18123407": {s:"Communication Skills", p:"Culinary Studies", a:"2023", sem:4, y:"BSCS2"},
+  "18222308": {s:"Communication Skills", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18223308": {s:"Communication Skills", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18224308": {s:"Communication Skills", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18425112": {s:"Communication Skills", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18222408": {s:"Communication Skills", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18223408": {s:"Communication Skills", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18122308": {s:"Communication Skills", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18222507": {s:"Communication Skills", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223507": {s:"Communication Skills", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18122408": {s:"Communication Skills", p:"Culinary Studies", a:"2022", sem:4, y:"BSCS1"},
+  "18224408": {s:"Communication Skills", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18125108": {s:"Communication Skills", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18125208": {s:"Communication Skills", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18124407": {s:"Communication Skills", p:"Culinary Studies", a:"2024", sem:4, y:"BSCS3"},
+  "18424208": {s:"Communication Skills", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18424406": {s:"Communication Skills", p:"Cruise Lines", a:"2022", sem:4, y:"BSCL1"},
+  "18425207": {s:"Communication Skills", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18322304": {s:"Cultural Heritage", p:"M.Sc.", a:"2022", sem:3, y:"MSTS1"},
+  "18323303": {s:"Cultural Heritage", p:"M.Sc.", a:"2023", sem:3, y:"MSTS2"},
+  "18324303": {s:"Cultural Heritage", p:"M.Sc.", a:"2024", sem:3, y:"MSTS3"},
+  "18322403": {s:"DP&D", p:"M.Sc.", a:"2022", sem:4, y:"MSTS1"},
+  "18323403": {s:"DP&D", p:"M.Sc.", a:"2023", sem:4, y:"MSTS2"},
+  "18324403": {s:"DP&D", p:"M.Sc.", a:"2024", sem:4, y:"MSTS3"},
+  "18323203": {s:"E&RATB", p:"M.Sc.", a:"2023", sem:2, y:"MSTS2"},
+  "18322201": {s:"E&RATB", p:"M.Sc.", a:"2022", sem:2, y:"MSTS1"},
+  "18324201": {s:"E&RATB", p:"M.Sc.", a:"2024", sem:2, y:"MSTS3"},
+  "18325201": {s:"E&RATB", p:"M.Sc.", a:"2025", sem:2, y:"MSTS4"},
+  "18322104": {s:"Economics", p:"M.Sc.", a:"2022", sem:1, y:"MSTS1"},
+  "18323104": {s:"Economics", p:"M.Sc.", a:"2023", sem:1, y:"MSTS2"},
+  "18324104": {s:"Economics", p:"M.Sc.", a:"2024", sem:1, y:"MSTS3"},
+  "18325104": {s:"Economics", p:"M.Sc.", a:"2025", sem:1, y:"MSTS4"},
+  "18222108": {s:"English", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18222209": {s:"English", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18223108": {s:"English", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18223208": {s:"English", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224107": {s:"English", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18224208": {s:"English", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225107": {s:"English", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18322404": {s:"Event Mgmt", p:"M.Sc.", a:"2022", sem:4, y:"MSTS1"},
+  "18323404": {s:"Event Mgmt", p:"M.Sc.", a:"2023", sem:4, y:"MSTS2"},
+  "18324404": {s:"Event Mgmt", p:"M.Sc.", a:"2024", sem:4, y:"MSTS3"},
+  "18122107": {s:"Event Mgmt", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18123107": {s:"Event Mgmt", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18124107": {s:"Event Mgmt", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18122207": {s:"Event Mgmt", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18123207": {s:"Event Mgmt", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18124207": {s:"Event Mgmt", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18123307": {s:"Event Mgmt", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18124307": {s:"Event Mgmt", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18123406": {s:"Event Mgmt", p:"Culinary Studies", a:"2023", sem:4, y:"BSCS2"},
+  "18122307": {s:"Event Mgmt", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18122407": {s:"Event Mgmt", p:"Culinary Studies", a:"2022", sem:4, y:"BSCS1"},
+  "18125107": {s:"Event Mgmt", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18125207": {s:"Event Mgmt", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18124406": {s:"Event Mgmt", p:"Culinary Studies", a:"2024", sem:4, y:"BSCS3"},
+  "18224402": {s:"F&B", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18222102": {s:"F&B", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223102": {s:"F&B", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224102": {s:"F&B", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18223202": {s:"F&B", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224202": {s:"F&B", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225202": {s:"F&B", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18222202": {s:"F&B", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18424304": {s:"F&B", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18424404": {s:"F&B", p:"Cruise Lines", a:"2022", sem:4, y:"BSCL1"},
+  "18223502": {s:"F&B", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18222502": {s:"F&B", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18424203": {s:"F&B", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18425203": {s:"F&B", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18222302": {s:"F&B", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18223302": {s:"F&B", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18224302": {s:"F&B", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18222402": {s:"F&B", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18223402": {s:"F&B", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18225102": {s:"F&B", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18424102": {s:"F&B", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18425108": {s:"F&B", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18224406": {s:"Facility Mgmt", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18222406": {s:"Facility Mgmt", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18223406": {s:"Facility Mgmt", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18222506": {s:"Facility Mgmt", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223506": {s:"Facility Mgmt", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18322203": {s:"Fin Mgmt", p:"M.Sc.", a:"2022", sem:2, y:"MSTS1"},
+  "18323204": {s:"Fin Mgmt", p:"M.Sc.", a:"2023", sem:2, y:"MSTS2"},
+  "18324203": {s:"Fin Mgmt", p:"M.Sc.", a:"2024", sem:2, y:"MSTS3"},
+  "18325203": {s:"Fin Mgmt", p:"M.Sc.", a:"2025", sem:2, y:"MSTS4"},
+  "18122105": {s:"FM", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18123105": {s:"FM", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18124105": {s:"FM", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18122205": {s:"FM", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18123205": {s:"FM", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18124205": {s:"FM", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18123305": {s:"FM", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18124305": {s:"FM", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18123405": {s:"FM", p:"Culinary Studies", a:"2023", sem:4, y:"BSCS2"},
+  "18122305": {s:"FM", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18122405": {s:"FM", p:"Culinary Studies", a:"2022", sem:4, y:"BSCS1"},
+  "18125105": {s:"FM", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18125205": {s:"FM", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18124405": {s:"FM", p:"Culinary Studies", a:"2024", sem:4, y:"BSCS3"},
+  "18122101": {s:"Food Production", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18122201": {s:"Food Production", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18122301": {s:"Food Production", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18122401": {s:"Food Production", p:"Culinary Studies", a:"2022", sem:4, y:"BSCS1"},
+  "18123101": {s:"Food Production", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18123201": {s:"Food Production", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18123301": {s:"Food Production", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18123401": {s:"Food Production", p:"Culinary Studies", a:"2023", sem:4, y:"BSCS2"},
+  "18124101": {s:"Food Production", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18124201": {s:"Food Production", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18124301": {s:"Food Production", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18124401": {s:"Food Production", p:"Culinary Studies", a:"2024", sem:4, y:"BSCS3"},
+  "18125101": {s:"Food Production", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18125201": {s:"Food Production", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18222101": {s:"Food Production", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18222201": {s:"Food Production", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18222301": {s:"Food Production", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18222401": {s:"Food Production", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18222501": {s:"Food Production", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223101": {s:"Food Production", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18223201": {s:"Food Production", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18223301": {s:"Food Production", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18223401": {s:"Food Production", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18223501": {s:"Food Production", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18224101": {s:"Food Production", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18224201": {s:"Food Production", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18224301": {s:"Food Production", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18224401": {s:"Food Production", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18225101": {s:"Food Production", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18225201": {s:"Food Production", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18424103": {s:"Food Production", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18424201": {s:"Food Production", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18425109": {s:"Food Production", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18425201": {s:"Food Production", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18222110": {s:"French", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223110": {s:"French", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224110": {s:"French", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18225109": {s:"French", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18223209": {s:"French", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224209": {s:"French", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225209": {s:"French", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18222508": {s:"French", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223508": {s:"French", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18222210": {s:"French", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18222309": {s:"French", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18223309": {s:"French", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18224309": {s:"French", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18222409": {s:"French", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18223409": {s:"French", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18224409": {s:"French", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18325107": {s:"French", p:"M.Sc.", a:"2025", sem:1, y:"MSTS4"},
+  "18325205": {s:"French", p:"M.Sc.", a:"2025", sem:2, y:"MSTS4"},
+  "18424107": {s:"French", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18424206": {s:"French", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18424308": {s:"French", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18424408": {s:"French", p:"Cruise Lines", a:"2022", sem:4, y:"BSCL1"},
+  "18425113": {s:"French", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18425205": {s:"French", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18222303": {s:"FO", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18222403": {s:"FO", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18222503": {s:"FO", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223303": {s:"FO", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18223403": {s:"FO", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18223503": {s:"FO", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18224303": {s:"FO", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18424303": {s:"FO", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18424403": {s:"FO", p:"Cruise Lines", a:"2022", sem:4, y:"BSCL1"},
+  "18224403": {s:"FO", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18222103": {s:"FO", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223103": {s:"FO", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224103": {s:"FO", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18225103": {s:"FO", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18223203": {s:"FO", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224203": {s:"FO", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225203": {s:"FO", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18222203": {s:"FO", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18424202": {s:"FO", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18425202": {s:"FO", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18222109": {s:"FOM", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223109": {s:"FOM", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224108": {s:"FOM", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18424104": {s:"FO", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18425110": {s:"FO", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18222207": {s:"FOM", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18223205": {s:"FOM", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224206": {s:"FOM", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225108": {s:"FOM", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18225206": {s:"FOM", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18424105": {s:"HK", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18425111": {s:"HK", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18222104": {s:"HK", p:"Hospitality Studies", a:"2022", sem:1, y:"BSHS1"},
+  "18223104": {s:"HK", p:"Hospitality Studies", a:"2023", sem:1, y:"BSHS2"},
+  "18224104": {s:"HK", p:"Hospitality Studies", a:"2024", sem:1, y:"BSHS3"},
+  "18225104": {s:"HK", p:"Hospitality Studies", a:"2025", sem:1, y:"BSHS4"},
+  "18222204": {s:"HK", p:"Hospitality Studies", a:"2022", sem:2, y:"BSHS1"},
+  "18223204": {s:"HK", p:"Hospitality Studies", a:"2023", sem:2, y:"BSHS2"},
+  "18224204": {s:"HK", p:"Hospitality Studies", a:"2024", sem:2, y:"BSHS3"},
+  "18225204": {s:"HK", p:"Hospitality Studies", a:"2025", sem:2, y:"BSHS4"},
+  "18222304": {s:"HK", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18222404": {s:"HK", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18222504": {s:"HK", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223304": {s:"HK", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18223404": {s:"HK", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18223504": {s:"HK", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18224304": {s:"HK", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18224404": {s:"HK", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18424305": {s:"HK", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18424405": {s:"HK", p:"Cruise Lines", a:"2022", sem:4, y:"BSCL1"},
+  "18424205": {s:"HK", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18425208": {s:"HK", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18322306": {s:"Hospitality Services", p:"M.Sc.", a:"2022", sem:3, y:"MSTS1"},
+  "18323305": {s:"Hospitality Services", p:"M.Sc.", a:"2023", sem:3, y:"MSTS2"},
+  "18324305": {s:"Hospitality Services", p:"M.Sc.", a:"2024", sem:3, y:"MSTS3"},
+  "18222306": {s:"Hotel Engineering", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18223306": {s:"Hotel Engineering", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18224306": {s:"Hotel Engineering", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18424407": {s:"HRM", p:"Cruise Lines", a:"2022", sem:4, y:"BSCL1"},
+  "18322204": {s:"HRM", p:"M.Sc.", a:"2022", sem:2, y:"MSTS1"},
+  "18323202": {s:"HRM", p:"M.Sc.", a:"2023", sem:2, y:"MSTS2"},
+  "18324204": {s:"HRM", p:"M.Sc.", a:"2024", sem:2, y:"MSTS3"},
+  "18325204": {s:"HRM", p:"M.Sc.", a:"2025", sem:2, y:"MSTS4"},
+  "18424306": {s:"HRM", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18122102": {s:"Indian Cuisine", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18122202": {s:"Indian Cuisine", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18122302": {s:"Indian Cuisine", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18122402": {s:"Indian Cuisine", p:"Culinary Studies", a:"2022", sem:4, y:"BSCS1"},
+  "18123102": {s:"Indian Cuisine", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18123202": {s:"Indian Cuisine", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18123302": {s:"Indian Cuisine", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18123402": {s:"Indian Cuisine", p:"Culinary Studies", a:"2023", sem:4, y:"BSCS2"},
+  "18124102": {s:"Indian Cuisine", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18124202": {s:"Indian Cuisine", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18124302": {s:"Indian Cuisine", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18124402": {s:"Indian Cuisine", p:"Culinary Studies", a:"2024", sem:4, y:"BSCS3"},
+  "18125102": {s:"Indian Cuisine", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18125202": {s:"Indian Cuisine", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18122103": {s:"Intl Cui", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18123103": {s:"Intl Cui", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18124103": {s:"Intl Cui", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18122203": {s:"Intl Cui", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18123203": {s:"Intl Cui", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18124203": {s:"Intl Cui", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18123303": {s:"Intl Cui", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18124303": {s:"Intl Cui", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18123403": {s:"Intl Cui", p:"Culinary Studies", a:"2023", sem:4, y:"BSCS2"},
+  "18124403": {s:"Intl Cui", p:"Culinary Studies", a:"2024", sem:4, y:"BSCS3"},
+  "18125203": {s:"Intl Cui", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18122303": {s:"Intl Cui", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18122403": {s:"Intl Cui", p:"Culinary Studies", a:"2022", sem:4, y:"BSCS1"},
+  "18125103": {s:"Intl Cui", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18125106": {s:"IF&SS", p:"Culinary Studies", a:"2025", sem:1, y:"BSCS4"},
+  "18122106": {s:"IF&SS", p:"Culinary Studies", a:"2022", sem:1, y:"BSCS1"},
+  "18123106": {s:"IF&SS", p:"Culinary Studies", a:"2023", sem:1, y:"BSCS2"},
+  "18124106": {s:"IF&SS", p:"Culinary Studies", a:"2024", sem:1, y:"BSCS3"},
+  "18322301": {s:"Intl Tourism", p:"M.Sc.", a:"2022", sem:3, y:"MSTS1"},
+  "18323301": {s:"Intl Tourism", p:"M.Sc.", a:"2023", sem:3, y:"MSTS2"},
+  "18324301": {s:"Intl Tourism", p:"M.Sc.", a:"2024", sem:3, y:"MSTS3"},
+  "18122306": {s:"KL&D", p:"Culinary Studies", a:"2022", sem:3, y:"BSCS1"},
+  "18123306": {s:"KL&D", p:"Culinary Studies", a:"2023", sem:3, y:"BSCS2"},
+  "18124306": {s:"KL&D", p:"Culinary Studies", a:"2024", sem:3, y:"BSCS3"},
+  "18424301": {s:"Kitchen Mgmt", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18424401": {s:"Kitchen Mgmt", p:"Cruise Lines", a:"2022", sem:5, y:"BSCL1"},
+  "18222305": {s:"Law", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18223305": {s:"Law", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18224305": {s:"Law", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18322103": {s:"M&OB", p:"M.Sc.", a:"2022", sem:1, y:"MSTS1"},
+  "18323103": {s:"M&OB", p:"M.Sc.", a:"2023", sem:1, y:"MSTS2"},
+  "18324103": {s:"M&OB", p:"M.Sc.", a:"2024", sem:1, y:"MSTS3"},
+  "18325103": {s:"M&OB", p:"M.Sc.", a:"2025", sem:1, y:"MSTS4"},
+  "18222405": {s:"Marketing", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18223405": {s:"Marketing", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18224405": {s:"Marketing", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18222505": {s:"Marketing", p:"Hospitality Studies", a:"2022", sem:5, y:"BSHS1"},
+  "18223505": {s:"Marketing", p:"Hospitality Studies", a:"2023", sem:5, y:"BSHS2"},
+  "18424307": {s:"Marketing", p:"Cruise Lines", a:"2022", sem:3, y:"BSCL1"},
+  "18322202": {s:"Marketing", p:"M.Sc.", a:"2022", sem:2, y:"MSTS1"},
+  "18323201": {s:"Marketing", p:"M.Sc.", a:"2023", sem:2, y:"MSTS2"},
+  "18324202": {s:"Marketing", p:"M.Sc.", a:"2024", sem:2, y:"MSTS3"},
+  "18325202": {s:"Marketing", p:"M.Sc.", a:"2025", sem:2, y:"MSTS4"},
+  "18122206": {s:"Nutrition", p:"Culinary Studies", a:"2022", sem:2, y:"BSCS1"},
+  "18124206": {s:"Nutrition", p:"Culinary Studies", a:"2024", sem:2, y:"BSCS3"},
+  "18125206": {s:"Nutrition", p:"Culinary Studies", a:"2025", sem:2, y:"BSCS4"},
+  "18222307": {s:"Nut Sci", p:"Hospitality Studies", a:"2022", sem:3, y:"BSHS1"},
+  "18223307": {s:"Nut Sci", p:"Hospitality Studies", a:"2023", sem:3, y:"BSHS2"},
+  "18224307": {s:"Nut Sci", p:"Hospitality Studies", a:"2024", sem:3, y:"BSHS3"},
+  "18123206": {s:"Nutrition", p:"Culinary Studies", a:"2023", sem:2, y:"BSCS2"},
+  "18222407": {s:"Research", p:"Hospitality Studies", a:"2022", sem:4, y:"BSHS1"},
+  "18223407": {s:"Research", p:"Hospitality Studies", a:"2023", sem:4, y:"BSHS2"},
+  "18224407": {s:"Research", p:"Hospitality Studies", a:"2024", sem:4, y:"BSHS3"},
+  "18322402": {s:"STM", p:"M.Sc.", a:"2022", sem:4, y:"MSTS1"},
+  "18323402": {s:"STM", p:"M.Sc.", a:"2023", sem:4, y:"MSTS2"},
+  "18324402": {s:"STM", p:"M.Sc.", a:"2024", sem:4, y:"MSTS3"},
+  "18322305": {s:"Sustainable Tourism", p:"M.Sc.", a:"2022", sem:3, y:"MSTS1"},
+  "18323304": {s:"Sustainable Tourism", p:"M.Sc.", a:"2023", sem:3, y:"MSTS2"},
+  "18324304": {s:"Sustainable Tourism", p:"M.Sc.", a:"2024", sem:3, y:"MSTS3"},
+  "18424108": {s:"TLT", p:"Cruise Lines", a:"2022", sem:1, y:"BSCL1"},
+  "18424207": {s:"TLT", p:"Cruise Lines", a:"2022", sem:2, y:"BSCL1"},
+  "18425114": {s:"TLT", p:"Cruise Lines", a:"2023", sem:1, y:"BSCL2"},
+  "18425206": {s:"TLT", p:"Cruise Lines", a:"2023", sem:2, y:"BSCL2"},
+  "18322106": {s:"TGE", p:"M.Sc.", a:"2022", sem:1, y:"MSTS1"},
+  "18323106": {s:"TGE", p:"M.Sc.", a:"2023", sem:1, y:"MSTS2"},
+  "18324106": {s:"TGE", p:"M.Sc.", a:"2024", sem:1, y:"MSTS3"},
+  "18325106": {s:"TGE", p:"M.Sc.", a:"2025", sem:1, y:"MSTS4"},
+  "18322406": {s:"TIM", p:"M.Sc.", a:"2022", sem:4, y:"MSTS1"},
+  "18323406": {s:"TIM", p:"M.Sc.", a:"2023", sem:4, y:"MSTS2"},
+  "18324406": {s:"TIM", p:"M.Sc.", a:"2024", sem:4, y:"MSTS3"},
+  "18322101": {s:"TPPP", p:"M.Sc.", a:"2022", sem:1, y:"MSTS1"},
+  "18323101": {s:"TPPP", p:"M.Sc.", a:"2023", sem:1, y:"MSTS2"},
+  "18324101": {s:"TPPP", p:"M.Sc.", a:"2024", sem:1, y:"MSTS3"},
+  "18325101": {s:"TPPP", p:"M.Sc.", a:"2025", sem:1, y:"MSTS4"},
+  "18322102": {s:"TPR", p:"M.Sc.", a:"2022", sem:1, y:"MSTS1"},
+  "18323102": {s:"TPR", p:"M.Sc.", a:"2023", sem:1, y:"MSTS2"},
+  "18324102": {s:"TPR", p:"M.Sc.", a:"2024", sem:1, y:"MSTS3"},
+  "18325102": {s:"TPR", p:"M.Sc.", a:"2025", sem:1, y:"MSTS4"},
+  "18322401": {s:"TATO", p:"M.Sc.", a:"2022", sem:4, y:"MSTS1"},
+  "18323401": {s:"TATO", p:"M.Sc.", a:"2023", sem:4, y:"MSTS2"},
+  "18324401": {s:"TATO", p:"M.Sc.", a:"2024", sem:4, y:"MSTS3"}
+};
+
+const SEM_ROMAN = ['','I','II','III','IV','V','VI','VII','VIII'];
+
+function decode() {
+  const raw = document.getElementById('codeInput').value.trim();
+  const errBox  = document.getElementById('errorBox');
+  const resBox  = document.getElementById('resultBox');
+
+  errBox.className = 'error';
+  resBox.className = 'result';
+
+  if (!/^\d{8}$/.test(raw)) {
+    errBox.textContent = 'Code must be exactly 8 digits (e.g. 18125208).';
+    errBox.className = 'error visible';
+    return;
+  }
+
+  const entry = DB[raw];
+  if (!entry) {
+    errBox.textContent = `Code "${raw}" was not found in the database. Please check and try again.`;
+    errBox.className = 'error visible';
+    return;
+  }
+
+  const { s, p, a, sem, y } = entry;
+
+  document.getElementById('rCode').textContent  = raw;
+  document.getElementById('rBadge').textContent = y;
+
+  document.getElementById('fieldsGrid').innerHTML = `
+    <div class="field subject-field full">
+      <div class="field-label">Subject</div>
+      <div class="field-value">${s}</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Programme</div>
+      <div class="field-value">${p}</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Semester</div>
+      <div class="field-value">${SEM_ROMAN[sem]} (Sem ${sem})</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Admission Year</div>
+      <div class="field-value">${a}</div>
+    </div>
+    <div class="field">
+      <div class="field-label">Year Code</div>
+      <div class="field-value">${y}</div>
+    </div>
+  `;
+
+  // Code anatomy strip
+  const prefix  = raw.slice(0,2);
+  const prog    = raw.slice(2,3);
+  const yr      = raw.slice(3,5);
+  const semD    = raw.slice(5,6);
+  const subD    = raw.slice(6,8);
+
+  document.getElementById('anatomy').innerHTML = `
+    <div class="seg s-prefix"><div class="seg-val">${prefix}</div><div class="seg-lbl">Prefix</div></div>
+    <div class="seg s-prog"><div class="seg-val">${prog}</div><div class="seg-lbl">Prog</div></div>
+    <div class="seg s-year"><div class="seg-val">${yr}</div><div class="seg-lbl">Year</div></div>
+    <div class="seg s-sem"><div class="seg-val">${semD}</div><div class="seg-lbl">Sem</div></div>
+    <div class="seg s-sub"><div class="seg-val">${subD}</div><div class="seg-lbl">Sub No.</div></div>
+  `;
+
+  resBox.className = 'result visible';
+}
+
+document.getElementById('codeInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') decode();
+});
+</script>
+</body>
+</html>
